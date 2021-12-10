@@ -1,56 +1,67 @@
 package v.kiselev.service;
 
-import v.kiselev.config.Config;
+import v.kiselev.utils.HttpRequest;
+import v.kiselev.utils.HttpResponse;
+import v.kiselev.utils.RequestParser;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.PrintWriter;
-import java.net.Socket;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
+import java.util.Deque;
 
-public class ClientHandlerImpl implements ClientHandler {
+public class ClientHandlerImpl implements Runnable {
 
-    public ClientHandlerImpl() {
+    private final SocketService socketService;
+    private final RequestParser requestParser;
+    private final FileService fileService;
+
+    public ClientHandlerImpl(SocketService socketService, RequestParser requestParser, FileService fileService) {
+        this.socketService = socketService;
+        this.requestParser = requestParser;
+        this.fileService = fileService;
     }
 
     @Override
-    public void handleRequest(Socket socket) {
-        try (BufferedReader input = new BufferedReader(
-                new InputStreamReader(
-                        socket.getInputStream(), StandardCharsets.UTF_8));
-             PrintWriter output = new PrintWriter(socket.getOutputStream())
-        ) {
+    public void run() {
+        Deque<String> rawRequest = socketService.readRequest();
+        HttpRequest httpRequest = requestParser.parseRequest(rawRequest);
 
-            String firstLine = input.readLine();
-            String[] parts = firstLine.split(" ");
-            System.out.println(firstLine);
-            while (input.ready()) {
-                System.out.println(input.readLine());
-            }
+        HttpResponse httpResponse = new HttpResponse();
 
-            Path path = Paths.get(Config.ROOT_PATH, parts[1]);
-            if (!Files.exists(path)) {
-                output.println("HTTP/1.1 404 NOT_FOUND");
-                output.println("Content-Type: text/html; charset=utf-8");
-                output.println();
-                output.println("<h1>Файл не найден!</h1>");
-                output.flush();
+
+        if (httpRequest.getMethod().equals("GET")) {
+
+            if (!fileService.fileIsExist(httpRequest.getUrl())) {
+                httpResponse.setCode("404");
+                httpResponse.setAnswer("NOT_FOUND");
+                httpResponse.setBody("<h1>Файл не найден!</h1>");
+                socketService.writeResponse(httpResponse.toString());
                 return;
             }
 
-            output.println("HTTP/1.1 200 OK");
-            output.println("Content-Type: text/html; charset=utf-8");
-            output.println();
+            httpResponse.setCode("200");
+            httpResponse.setAnswer("OK");
+            httpResponse.setBody(fileService.getFile(httpRequest.getUrl()));
 
-            Files.newBufferedReader(path).transferTo(output);
+            socketService.writeResponse(httpResponse.toString());
+        } else if (httpRequest.getMethod().equals("POST")) {
+            System.out.println("post");
+            fileService.createFileAndWriteBody(httpRequest.getUrl(), httpRequest.getBody());
+            System.out.println("canceled post");
+            httpResponse.setCode("200");
+            httpResponse.setAnswer("OK");
 
-            System.out.println("Client disconnected!");
-        } catch (IOException e) {
-            e.printStackTrace();
         }
+        else {
+            httpResponse.setContentType("405");
+            httpResponse.setAnswer("METHOD_NOT_ALLOWED");
+            httpResponse.setBody("<h1>Метод не поддерживается!</h1>");
+            socketService.writeResponse(httpResponse.toString());
+            return;
+        }
+        try {
+            socketService.close();
+        } catch (IOException e) {
+            throw new IllegalStateException(e);
+        }
+        System.out.println("Client disconnected!");
     }
 }
