@@ -1,9 +1,12 @@
 package v.kiselev.config;
 
 import lombok.extern.slf4j.Slf4j;
-import v.kiselev.service.ClientHandlerImpl;
+import v.kiselev.handler.ClientHandlerImpl;
+import v.kiselev.handler.MethodHandlerFactory;
 import v.kiselev.service.FileService;
+import v.kiselev.service.SocketService;
 import v.kiselev.service.SocketServiceFactory;
+import v.kiselev.utils.RequestParser;
 import v.kiselev.utils.RequestParserFactory;
 
 import java.io.IOException;
@@ -21,10 +24,14 @@ public class Server {
             while (true) {
                 Socket socket = serverSocket.accept();
                 FileService fileService = new FileService();
+                SocketService socketService = SocketServiceFactory.createSocketService(socket);
+                RequestParser requestParser = RequestParserFactory.createRequestParser();
                 log.info("New client connected!");
-                new Thread(new ClientHandlerImpl(SocketServiceFactory.createSocketService(socket),
-                        RequestParserFactory.createRequestParser(),
-                        fileService))
+                new Thread(new ClientHandlerImpl(
+                        socketService,
+                        requestParser,
+                        fileService,
+                        MethodHandlerFactory.create(socketService, fileService)))
                         .start();
             }
         } catch (IOException e) {
