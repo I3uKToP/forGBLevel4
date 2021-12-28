@@ -1,0 +1,31 @@
+GET http://localhost:8080/calcDistance
+###
+POST localhost:8080/test
+Content-Type: application/json
+
+{
+  "lineItemDto": [
+    {
+      "name": "Phone",
+      "cost": 75000,
+      "qty": 1
+    },
+    {
+      "name": "headphone",
+      "cost": 5000,
+      "qty": 1
+    },
+    {
+      "name": "case",
+      "cost": 1000,
+      "qty": 1
+    }
+  ],
+  "address": "St. Petersburg 28"
+}
+###
+
+PUT http://localhost:8080/
+Content-Type: application/json
+
+###
